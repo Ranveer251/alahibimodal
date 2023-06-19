@@ -1,0 +1,25 @@
+data/raw/
+data/3DMOT2015Labels/
+data/cvpr2015_pedestrianWalkingPathDataset.rar
+data/Wildtrack_dataset_full.zip
+data/miverva.zip
+output*
+trajnetdataset/private
+
+# Python
+venv*/
+*.pyc
+*.egg-info/
+dist/
+.cache
+.idea
+
+# Editors
+.vscode/
+
+# OS
+.DS_Store
+
+# backup
+backup/
+
