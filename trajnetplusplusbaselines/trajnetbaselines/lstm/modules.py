@@ -61,8 +61,8 @@ class Hidden2Normal(torch.nn.Module):
         normal[:, 3] = 0.01 + 0.2 * torch.sigmoid(normal[:, 3])  # sigmay 1
         normal[:, 4] = 0.7 * torch.sigmoid(normal[:, 4])  # rho1
         # normal[:, 5] = 0.7 * torch.sigmoid(normal[:, 5])  # rho
-        normal[:, 7] = 0.01 + 0.2 * torch.sigmoid(normal[:, 2])  # sigmax 2
-        normal[:, 8] = 0.01 + 0.2 * torch.sigmoid(normal[:, 3])  # sigmay 2
-        normal[:, 9] = 0.7 * torch.sigmoid(normal[:, 4])  # rho2
+        normal[:, 7] = 0.01 + 0.2 * torch.sigmoid(normal[:, 7])  # sigmax 2
+        normal[:, 8] = 0.01 + 0.2 * torch.sigmoid(normal[:, 8])  # sigmay 2
+        normal[:, 9] = 0.7 * torch.sigmoid(normal[:, 9])  # rho2
 
         return normal
