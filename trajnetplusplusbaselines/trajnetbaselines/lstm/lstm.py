@@ -286,7 +286,21 @@ class LSTMPredictor(object):
     def load(filename):
         with open(filename, 'rb') as f:
             return torch.load(f)
-    
+    def joint_pdf(self, xy,mu1, mu2, s1, s2, rho):
+        x1, x2 = xy[:,0], xy[:,1]
+        # mu1, mu2, s1, s2, rho = self.mu1x, self.mu1y, self.s1x, self.s1y, self.rho1
+        norm1 = x1 - mu1
+        norm2 = x2 - mu2
+
+        sigma1sigma2 = s1 * s2
+
+        z = (norm1 / s1) ** 2 + (norm2 / s2) ** 2 - 2 * rho * norm1 * norm2 / sigma1sigma2
+
+        numerator = np.exp(-z / (2 * (1 - rho ** 2)))
+        denominator = 2 * math.pi * sigma1sigma2 * np.sqrt(1 - rho ** 2)
+
+        return numerator/(0.01 + denominator)
+
     def joint_pdf1(self, xy):
         x1, x2 = xy[:,0], xy[:,1]
         mu1, mu2, s1, s2, rho = self.mu1x, self.mu1y, self.s1x, self.s1y, self.rho1
@@ -340,38 +354,88 @@ class LSTMPredictor(object):
             batch_split = torch.Tensor(batch_split).long()
 
             multimodal_outputs = {}
-            for num_p in range(modes):
+            # md_outputs = 
+            # for num_p in range(modes):
                 # _, output_scenes = self.model(xy[start_length:obs_length], scene_goal, batch_split, xy[obs_length:-1].clone())
-                _, output_scenes, normals = self.model(xy[start_length:obs_length], scene_goal, batch_split, n_predict=n_predict)
-                output_scenes = output_scenes.numpy()
-                # normals = normals.numpy()
+            _, output_scenes, normals = self.model(xy[start_length:obs_length], scene_goal, batch_split, n_predict=n_predict)
+            output_scenes = output_scenes.numpy()
+            # print(output_scenes)
+            md_outputs = np.stack([output_scenes for i in range(8)])
+            # print(len(md_outputs))
+            # print(len(normals))
+            # print(md_outputs[0].shape)
+            # print(normals[0].shape)
+            # normals = normals.numpy()
+            split = 0
+            for t in range(len(normals)):
+              normal = normals[t]
+              normal = normal.numpy()
+              curr_pos = output_scenes.shape[0] - len(normals) + t
+              prev_pos = curr_pos - 1
 
-                for i in range(len(normals)):
-                  normal = normals[i]
-                  normal = normal.numpy()
-                  curr_pos = obs_length+i
-                  prev_pos = curr_pos - 1
+              # print(curr_pos, prev_pos)
 
-                  initial_point_mode1 = output_scenes[curr_pos]
-                  initial_point_mode2 = 2*output_scenes[prev_pos] - output_scenes[curr_pos]
+              # for p in range(normal.size(0)):
+              #   mode1 = joint_pdf(normal[p])
 
-                  result_mode1 = minimize(self.negative_bimodal_joint_pdf, initial_point_mode1)
+              p1 = normal[:,:2]
+              p2 = normal[:,5:7]
 
-                  # Perform the optimization for mode 2
-                  result_mode2 = minimize(self.negative_bimodal_joint_pdf, initial_point_mode2)
+              prob1 = self.joint_pdf(p1,normal[:,0],normal[:,1],normal[:,2],normal[:,3],normal[:,4])
+              prob2 = self.joint_pdf(p2,normal[:,5],normal[:,6],normal[:,7],normal[:,8],normal[:,9])
 
-                  maximum_point_mode1 = result_mode1.x
-                  maximum_point_mode2 = result_mode2.x
+              prob1 = np.nanmean(prob1)
+              prob2 = np.nanmean(prob2)
+              # print(prob1, prob2)
+              # continue
 
-                  print(maximum_point_mode1)
+              if abs(prob1-prob2) <= 20 and split<3:
+                split += 1
+                if split == 1:
+                  md_outputs[0:4, curr_pos] = md_outputs[0:4, prev_pos] + p1
+                  md_outputs[4:8, curr_pos] = md_outputs[4:8, prev_pos] + p2
+                elif split == 2:
+                  md_outputs[0:2, curr_pos] = md_outputs[0:2, prev_pos] + p1
+                  md_outputs[2:4, curr_pos] = md_outputs[2:4, prev_pos] + p2
+                  md_outputs[4:6, curr_pos] = md_outputs[4:6, prev_pos] + p1
+                  md_outputs[6:8, curr_pos] = md_outputs[6:8, prev_pos] + p2
+                elif split == 3:
+                  md_outputs[0:8:2, curr_pos] = md_outputs[0:8:2,prev_pos] + p1
+                  md_outputs[1:8:2, curr_pos] = md_outputs[1:8:2, prev_pos] + p2
+              else:
+                # print("Here")
+                p = p1
+                if prob2 > prob1:
+                  p = p2
+                
+                # output_scenes[curr_pos] = output_scenes[prev_pos]
+                # print(md_outputs[::, curr_pos])
+                # print(md_outputs[::, prev_pos])
+                md_outputs[::, curr_pos] = md_outputs[::, prev_pos] + p
+
+              # initial_point_mode1 = output_scenes[curr_pos]
+              # initial_point_mode2 = 2*output_scenes[prev_pos] - output_scenes[curr_pos]
+
+              # result_mode1 = minimize(self.negative_bimodal_joint_pdf, initial_point_mode1)
+
+              # # Perform the optimization for mode 2
+              # result_mode2 = minimize(self.negative_bimodal_joint_pdf, initial_point_mode2)
+
+              # maximum_point_mode1 = result_mode1.x
+              # maximum_point_mode2 = result_mode2.x
+
+              # print(maximum_point_mode1)
 
 
-                if args.normalize_scene:
-                    output_scenes = augmentation.inverse_scene(output_scenes, rotation, center)
-                output_primary = output_scenes[-n_predict:, 0]
-                output_neighs = output_scenes[-n_predict:, 1:]
-                ## Dictionary of predictions. Each key corresponds to one mode
-                multimodal_outputs[num_p] = [output_primary, output_neighs]
+            # if args.normalize_scene:
+            #     output_scenes = augmentation.inverse_scene(output_scenes, rotation, center)
+
+            for i in range(md_outputs.shape[0]):
+
+              output_primary = md_outputs[i, -n_predict:, 0]
+              output_neighs = md_outputs[i, -n_predict:, 1:]
+            ## Dictionary of predictions. Each key corresponds to one mode
+              multimodal_outputs[i] = [output_primary, output_neighs]
 
         ## Return Dictionary of predictions. Each key corresponds to one mode
         return multimodal_outputs

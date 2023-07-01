@@ -29,7 +29,7 @@ class Trainer(object):
     def __init__(self, model=None, criterion=None, optimizer=None, lr_scheduler=None,
                  device=None, batch_size=8, obs_length=9, pred_length=12, augment=True,
                  normalize_scene=False, save_every=1, start_length=0, obs_dropout=False,
-                 augment_noise=False, val_flag=True):
+                 augment_noise=False, val_flag=True, mirror_train=0):
         self.model = model if model is not None else LSTM()
         self.criterion = criterion if criterion is not None else PredictionLoss()
         self.optimizer = optimizer if optimizer is not None else \
@@ -56,8 +56,10 @@ class Trainer(object):
         self.obs_dropout = obs_dropout
 
         self.val_flag = val_flag
+        self.mirror_train = mirror_train
 
     def loop(self, train_scenes, val_scenes, train_goals, val_goals, out, epochs=35, start_epoch=0):
+        self.epochs = epochs
         for epoch in range(start_epoch, epochs):
             if epoch % self.save_every == 0:
                 state = {'epoch': epoch, 'state_dict': self.model.state_dict(),
@@ -117,6 +119,15 @@ class Trainer(object):
             if self.augment_noise:
                 scene = augmentation.add_noise(scene, thresh=0.02, ped='neigh')
 
+            # print(scene[0,:,0].shape)
+            mid_x, mid_y = np.nanmean(scene[0,:,0]), np.nanmean(scene[0,:,1])
+            # print(mid_x, mid_y)
+            if self.epochs - epoch < self.mirror_train//2:
+              scene[:,:,1] = 2*mid_y - scene[:,:,1]
+            elif self.epochs - epoch < self.mirror_train:
+              scene[:,:,0] = 2*mid_x - scene[:,:,0]
+            
+            # scene[:,:,1] = 2*mid_y - scene[:,:,1]
             ## Augment scene to batch of scenes
             batch_scene.append(scene)
             batch_split.append(int(scene.shape[1]))
@@ -191,6 +202,8 @@ class Trainer(object):
             ##process scene
             if self.normalize_scene:
                 scene, _, _, scene_goal = center_scene(scene, self.obs_length, goals=scene_goal)
+
+            # print(scene)
 
             ## Augment scene to batch of scenes
             batch_scene.append(scene)
@@ -349,6 +362,7 @@ def main(epochs=25):
     parser.add_argument('--sample', default=1.0, type=float,
                         help='sample ratio when loading train/val scenes')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--mirror_train', type=int, default=10)
 
     ## Augmentations
     parser.add_argument('--augment', action='store_true',
@@ -459,10 +473,8 @@ def main(epochs=25):
 
     # add args.device
     args.device = torch.device('cpu')
-    if not args.disable_cuda and torch.cuda.is_available():
-        args.device = torch.device('cuda')
-    
-    print(args.device)
+    # if not args.disable_cuda and torch.cuda.is_available():
+    #     args.device = torch.device('cuda')
 
     args.path = 'DATA_BLOCK/' + args.path
     ## Prepare data
@@ -534,7 +546,7 @@ def main(epochs=25):
                       criterion=criterion, batch_size=args.batch_size, obs_length=args.obs_length,
                       pred_length=args.pred_length, augment=args.augment, normalize_scene=args.normalize_scene,
                       save_every=args.save_every, start_length=args.start_length, obs_dropout=args.obs_dropout,
-                      augment_noise=args.augment_noise, val_flag=val_flag)
+                      augment_noise=args.augment_noise, val_flag=val_flag, mirror_train=args.mirror_train)
     trainer.loop(train_scenes, val_scenes, train_goals, val_goals, args.output, epochs=args.epochs, start_epoch=start_epoch)
 
 
