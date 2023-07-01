@@ -473,8 +473,8 @@ def main(epochs=25):
 
     # add args.device
     args.device = torch.device('cpu')
-    # if not args.disable_cuda and torch.cuda.is_available():
-    #     args.device = torch.device('cuda')
+    if not args.disable_cuda and torch.cuda.is_available():
+        args.device = torch.device('cuda')
 
     args.path = 'DATA_BLOCK/' + args.path
     ## Prepare data
