@@ -91,7 +91,7 @@ class GridBasedPooling(torch.nn.Module):
         elif self.embedding_arch == 'lstm_layer':
             self.embedding = self.lstm_layer(hidden_dim)
 
-    def forward(self, hidden_state, obs1, obs2):
+    def forward(self, hidden_state, obs1, obs2, obs_first = None):
         batch_size, num_tracks = obs1.size(0), obs1.size(1) 
         ## Make chosen grid
         if self.type_ == 'occupancy':

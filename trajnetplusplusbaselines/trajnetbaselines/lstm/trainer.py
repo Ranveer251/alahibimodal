@@ -29,7 +29,7 @@ class Trainer(object):
     def __init__(self, model=None, criterion=None, optimizer=None, lr_scheduler=None,
                  device=None, batch_size=8, obs_length=9, pred_length=12, augment=True,
                  normalize_scene=False, save_every=1, start_length=0, obs_dropout=False,
-                 augment_noise=False, val_flag=True, mirror_train=0):
+                 augment_noise=False, val_flag=True, curvature_loss=False, mirror_train=0):
         self.model = model if model is not None else LSTM()
         self.criterion = criterion if criterion is not None else PredictionLoss()
         self.optimizer = optimizer if optimizer is not None else \
@@ -51,6 +51,7 @@ class Trainer(object):
         self.augment = augment
         self.augment_noise = augment_noise
         self.normalize_scene = normalize_scene
+        self.curvature_loss = curvature_loss
 
         self.start_length = start_length
         self.obs_dropout = obs_dropout
@@ -280,6 +281,22 @@ class Trainer(object):
         # print("Going for loss")
         loss = self.criterion(rel_outputs[-self.pred_length:], targets, batch_split, primary_prediction) * self.batch_size
         # print("Back from loss")
+        if self.curvature_loss:
+            curvature_loss = 0
+            alpha = 0.7
+            size = outputs.size(dim=1)
+            for i in range(size):
+              output = outputs[:,i,:]
+              # print("outputSize",output.size())
+              delta = [x1 - x2 for x1, x2 in zip(output[1:],output[:-1])]
+              # print("Delta",delta)
+              deltaSum = [(x1+x2).pow(2).sum().sqrt() for x1, x2 in zip(delta[1:],delta[:-1])]
+              cl = alpha * sum(deltaSum)
+              curvature_loss = curvature_loss + cl
+              # print("cl", cl)
+            # error => only one element tensors can be converted to Python scalars
+            cl = torch.tensor([curvature_loss])
+            loss  = torch.add(loss,cl)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -373,6 +390,7 @@ def main(epochs=25):
                         help='flag to add noise to observations for robustness')
     parser.add_argument('--obs_dropout', action='store_true',
                         help='perform observation length dropout')
+    parser.add_argument('--curvature_loss', action='store_true', help='add curvature loss')
 
     ## Loading pre-trained models
     pretrain = parser.add_argument_group('pretraining')
@@ -413,6 +431,7 @@ def main(epochs=25):
                                  help='latent dimension of encoding hidden dimension during social pooling')
     hyperparameters.add_argument('--norm', default=0, type=int,
                                  help='normalization scheme for input batch during grid-based pooling')
+    hyperparameters.add_argument('--intent_pool', action='store_true', help='use intent pooling')
 
     ## Non-Grid-based pooling
     hyperparameters.add_argument('--no_vel', action='store_true',
@@ -510,7 +529,7 @@ def main(epochs=25):
                  embedding_dim=args.coordinate_embedding_dim,
                  hidden_dim=args.hidden_dim,
                  goal_flag=args.goals,
-                 goal_dim=args.goal_dim)
+                 goal_dim=args.goal_dim, intent_pool = args.intent_pool)
 
     # optimizer and schedular
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -546,7 +565,7 @@ def main(epochs=25):
                       criterion=criterion, batch_size=args.batch_size, obs_length=args.obs_length,
                       pred_length=args.pred_length, augment=args.augment, normalize_scene=args.normalize_scene,
                       save_every=args.save_every, start_length=args.start_length, obs_dropout=args.obs_dropout,
-                      augment_noise=args.augment_noise, val_flag=val_flag, mirror_train=args.mirror_train)
+                      augment_noise=args.augment_noise, val_flag=val_flag, curvature_loss=args.curvature_loss, mirror_train=args.mirror_train)
     trainer.loop(train_scenes, val_scenes, train_goals, val_goals, args.output, epochs=args.epochs, start_epoch=start_epoch)
 
 
