@@ -297,7 +297,7 @@ class LSTM(torch.nn.Module):
         else:
           obs_first = None
 
-          h_stack = []
+        h_stack = []
         for obs1, obs2 in zip(observed[:-1], observed[1:]):
             ##LSTM Step
             hidden_cell_state, normal = self.step(self.encoder, hidden_cell_state, obs1, obs2, goals, batch_split, obs_first)
