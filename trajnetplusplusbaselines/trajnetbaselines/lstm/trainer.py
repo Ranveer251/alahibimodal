@@ -295,7 +295,7 @@ class Trainer(object):
               curvature_loss = curvature_loss + cl
               # print("cl", cl)
             # error => only one element tensors can be converted to Python scalars
-            cl = torch.tensor([curvature_loss])
+            cl = torch.tensor([curvature_loss]).to(self.device)
             loss  = torch.add(loss,cl)
         self.optimizer.zero_grad()
         loss.backward()
