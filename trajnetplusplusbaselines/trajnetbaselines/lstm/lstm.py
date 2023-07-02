@@ -148,7 +148,7 @@ class LSTM(torch.nn.Module):
         self.ca2 = SEBasicBlock(128,128)
         self.ca3 = SEBasicBlock(128,128)
 
-        self.mlp = nn.Linear(8,1)
+        self.mlp = nn.Linear(7,1)
         # Predict the parameters of a multivariate normal:
         # mu_vel_x, mu_vel_y, sigma_vel_x, sigma_vel_y, rho
         self.hidden2normal = Hidden2Normal(self.hidden_dim)
