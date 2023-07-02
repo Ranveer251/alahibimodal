@@ -86,13 +86,6 @@ class LSTM(torch.nn.Module):
         ## LSTMs
         self.encoder = torch.nn.LSTMCell(self.embedding_dim + goal_rep_dim + pooling_dim, self.hidden_dim)
         self.decoder = torch.nn.LSTMCell(self.embedding_dim + goal_rep_dim + pooling_dim, self.hidden_dim)
-        
-        ## Channel-Wise Attention (CNN)
-        self.ca1 = SEBasicBlock(128,128)
-        self.ca2 = SEBasicBlock(128,128)
-        self.ca3 = SEBasicBlock(128,128)
-
-        self.mlp = nn.Linear(7,1)
         # Predict the parameters of a multivariate normal:
         # mu_vel_x, mu_vel_y, sigma_vel_x, sigma_vel_y, rho
         self.hidden2normal = Hidden2Normal(self.hidden_dim)
