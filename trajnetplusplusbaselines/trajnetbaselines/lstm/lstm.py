@@ -148,7 +148,7 @@ class LSTM(torch.nn.Module):
         self.ca2 = SEBasicBlock(128,128)
         self.ca3 = SEBasicBlock(128,128)
 
-        self.mlp = nn.Linear(7,1)
+        self.mlp = nn.Linear(8,1)
         # Predict the parameters of a multivariate normal:
         # mu_vel_x, mu_vel_y, sigma_vel_x, sigma_vel_y, rho
         self.hidden2normal = Hidden2Normal(self.hidden_dim)
@@ -314,7 +314,8 @@ class LSTM(torch.nn.Module):
         h_stack_t = self.ca2(h_stack_t)
         h_stack_t = self.ca3(h_stack_t)
         # print(h_stack_t.size())
-        h_stack_t = nn.functional.pad(h_stack_t, (0,1))
+        if h_stack_t.size()[1] != 8:
+            h_stack_t = nn.functional.pad(h_stack_t, (0,1))
         h_new = self.mlp(h_stack_t)
         # print(h_new.size())
 
