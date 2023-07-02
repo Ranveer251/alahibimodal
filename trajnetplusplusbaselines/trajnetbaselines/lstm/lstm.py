@@ -314,6 +314,7 @@ class LSTM(torch.nn.Module):
         h_stack_t = self.ca2(h_stack_t)
         h_stack_t = self.ca3(h_stack_t)
         # print(h_stack_t.size())
+        h_stack_t = nn.functional.pad(h_stack_t, (0,1))
         h_new = self.mlp(h_stack_t)
         # print(h_new.size())
 
