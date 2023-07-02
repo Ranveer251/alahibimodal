@@ -44,62 +44,6 @@ def generate_pooling_inputs(obs2, obs1, hidden_cell_state, track_mask, batch_spl
 
     return curr_positions, prev_positions, curr_hidden_state, track_mask_positions
 
-def conv3x3(in_planes, out_planes, stride=1):
-    return nn.Conv1d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
-
-# SELayer Source: https://github.com/HuangxingLin123/A2Net-Adjacent-Aggregation-Networks-for-Image-Raindrop-Removal
-
-class SELayer(nn.Module):
-    def __init__(self, channel, reduction=16):
-        super(SELayer, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Sequential(
-            nn.Linear(channel, channel // reduction, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Linear(channel // reduction, channel, bias=False),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        b, c, _, = x.size()
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c, 1)
-        return x * y.expand_as(x)
-
-class SEBasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
-                 base_width=64, dilation=1, norm_layer=None,
-                 *, reduction=16):
-        super(SEBasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm1d(planes)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes, 1)
-        self.bn2 = nn.BatchNorm1d(planes)
-        self.se = SELayer(planes, reduction)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        residual = x
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.se(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
-
 class LSTM(torch.nn.Module):
     def __init__(self, embedding_dim=64, hidden_dim=128, pool=None, pool_to_input=True, goal_dim=None, goal_flag=False, intent_pool = False):
         """ Initialize the LSTM forecasting model
@@ -296,30 +240,14 @@ class LSTM(torch.nn.Module):
           obs_first = observed[0]
         else:
           obs_first = None
-
-        h_stack = []
         for obs1, obs2 in zip(observed[:-1], observed[1:]):
             ##LSTM Step
             hidden_cell_state, normal = self.step(self.encoder, hidden_cell_state, obs1, obs2, goals, batch_split, obs_first)
 
             # concat predictions
-            h_temp = torch.stack(hidden_cell_state[0], dim=0)
-            # print(h_temp.size())
-            h_stack.append(h_temp)
             normals.append(normal)
             positions.append(obs2 + normal[:, :2])  # no sampling, just mean
-        h_stack_t = torch.stack(h_stack, dim=2)
-        # print(h_stack_t.size())
-        h_stack_t = self.ca1(h_stack_t)
-        h_stack_t = self.ca2(h_stack_t)
-        h_stack_t = self.ca3(h_stack_t)
-        # print(h_stack_t.size())
-        h_new = self.mlp(h_stack_t)
-        # print(h_new.size())
-
-        hcs_list = list(torch.unbind(torch.squeeze(h_new), dim = 0))
-        hidden_cell_state = (hcs_list, hidden_cell_state[1])
-
+       
         # initialize predictions with last position to form velocity. DEEP COPY !!!
         prediction_truth = copy.deepcopy(list(itertools.chain.from_iterable(
             (observed[-1:], prediction_truth)
